@@ -244,21 +244,34 @@ app.all("/verificar-dni", async (req, res) => {
   
   try {
     const body = req.body?.[0];
-    const telefono = body?.contact?.phone;
+    
+    let telefono = body?.contact?.phone;
+    
+    if (telefono === "{{phone}}" || !telefono || telefono.includes("{{")) {
+      telefono = body?.info?.message?.channel_data?.message?.from || 
+                 body?.last_message_data?.message?.from ||
+                 body?.contact?.last_message_data?.message?.from;
+    }
     
     let dni = body?.info?.message?.channel_data?.message?.text?.body;
     
-    if (!dni || dni.length < 8) {
-      dni = body?.contact?.variables?.DNI_USUARIO;
+    if (!dni || dni.includes("{{") || dni.trim().length < 8) {
+      dni = body?.contact?.last_message || 
+            body?.last_message_data?.message?.text?.body ||
+            body?.contact?.variables?.DNI_USUARIO;
+    }
+    
+    if (dni) {
+      dni = dni.trim().replace(/\{\{.*?\}\}/g, '').trim();
     }
     
     console.log("📞 Teléfono extraído:", telefono);
     console.log("🆔 DNI extraído:", dni);
+    console.log("🔍 DNI después de limpiar:", dni);
     
     if (!dni || dni.length < 8) {
       console.log("❌ DNI no válido o no encontrado");
       return res.json({
-        status: "error",
         mensaje: "❌ Por favor, ingresa un DNI válido de 8 dígitos."
       });
     }
@@ -266,7 +279,6 @@ app.all("/verificar-dni", async (req, res) => {
     if (!telefono) {
       console.log("❌ No se encontró teléfono en la petición");
       return res.json({
-        status: "error",
         mensaje: "❌ No se pudo identificar tu número de teléfono."
       });
     }
@@ -274,10 +286,9 @@ app.all("/verificar-dni", async (req, res) => {
     dni = dni.replace(/\D/g, '');
     
     if (dni.length !== 8) {
-      console.log("❌ DNI no tiene 8 dígitos");
+      console.log("❌ DNI no tiene 8 dígitos:", dni.length);
       return res.json({
-        status: "error",
-        mensaje: "❌ El DNI debe tener exactamente 8 dígitos."
+        mensaje: `❌ El DNI debe tener exactamente 8 dígitos. Recibimos: ${dni.length} dígitos.`
       });
     }
     
@@ -292,8 +303,9 @@ app.all("/verificar-dni", async (req, res) => {
     
     if (!quertiumResponse.ok) {
       console.log("❌ Error en API de Quertium:", quertiumResponse.status);
+      const errorText = await quertiumResponse.text();
+      console.log("Error detallado:", errorText);
       return res.json({
-        status: "error",
         mensaje: "❌ No pudimos verificar tu DNI. Por favor, verifica que sea correcto."
       });
     }
@@ -310,7 +322,9 @@ app.all("/verificar-dni", async (req, res) => {
     
     console.log("👤 Nombre completo:", nombreCompleto);
     
-    console.log("🔍 Verificando si paciente existe en BD...");
+    const telefonoStr = String(telefono).replace(/^51/, '');
+    
+    console.log("🔍 Verificando si paciente existe en BD con DNI:", dni);
     const pacienteExistente = await pool.query(
       "SELECT id_paciente, nombre, dni, celular FROM pacientes WHERE dni = $1",
       [dni]
@@ -319,48 +333,31 @@ app.all("/verificar-dni", async (req, res) => {
     let paciente;
     
     if (pacienteExistente.rows.length > 0) {
-      // Paciente ya existe
       paciente = pacienteExistente.rows[0];
       console.log("✅ Paciente ya existe en BD:", paciente);
       
-      // Actualizar teléfono si es diferente
-      if (paciente.celular !== telefono) {
+      if (paciente.celular !== telefonoStr && paciente.celular !== String(telefono)) {
         console.log("📱 Actualizando teléfono del paciente...");
         await pool.query(
           "UPDATE pacientes SET celular = $1 WHERE id_paciente = $2",
-          [telefono, paciente.id_paciente]
+          [telefonoStr, paciente.id_paciente]
         );
         console.log("✅ Teléfono actualizado");
       }
       
     } else {
-      // Crear nuevo paciente
       console.log("💾 Creando nuevo paciente en BD...");
       const nuevoResult = await pool.query(
         "INSERT INTO pacientes (nombre, dni, celular) VALUES ($1, $2, $3) RETURNING *",
-        [nombreCompleto, dni, telefono]
+        [nombreCompleto, dni, telefonoStr]
       );
       
       paciente = nuevoResult.rows[0];
       console.log("✅ Nuevo paciente creado:", paciente);
     }
     
-    const mensaje = `✅ ¡Hola ${nombreCompleto}!
-
-Tu DNI ha sido verificado correctamente.
-📱 Teléfono registrado: ${telefono}
-
-Ahora puedes continuar con tu reserva de cita.`;
-    
     const response = {
-      status: "ok",
-      mensaje: mensaje,
-      paciente: {
-        id: paciente.id_paciente,
-        nombre: nombreCompleto,
-        dni: dni,
-        celular: telefono
-      }
+      mensaje: `✅ DNI validado con éxito\n\n${nombreCompleto}`
     };
     
     console.log("📤 Enviando respuesta:");
@@ -377,9 +374,7 @@ Ahora puedes continuar con tu reserva de cita.`;
     console.error("====== FIN PETICIÓN CON ERROR ======\n");
     
     res.status(500).json({ 
-      status: "error", 
-      mensaje: "❌ Ocurrió un error al verificar tu DNI. Por favor, intenta nuevamente.",
-      detail: error.message 
+      mensaje: "❌ Ocurrió un error al verificar tu DNI. Por favor, intenta nuevamente."
     });
   }
 });

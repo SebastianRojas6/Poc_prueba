@@ -90,6 +90,143 @@ app.all("/medicos", async (req, res) => {
   }
 });
 
+app.get("/medicos/:id_medico/horarios", async (req, res) => {
+  console.log("\n====== NUEVA PETICIÓN GET /medicos/:id_medico/horarios ======");
+  console.log("⏰ Hora:", new Date().toISOString());
+  console.log("📋 Params:", req.params);
+  console.log("📋 Query:", req.query);
+  
+  try {
+    const { id_medico } = req.params;
+    const { fecha } = req.query; // Opcional: ?fecha=2025-10-13
+    
+    console.log("👨‍⚕️ ID Médico:", id_medico);
+    console.log("📅 Fecha (opcional):", fecha);
+    
+    if (!id_medico) {
+      return res.json({
+        status: "error",
+        mensaje: "❌ ID de médico no especificado."
+      });
+    }
+    
+    // Verificar que el médico existe
+    const medicoResult = await pool.query(
+      "SELECT id_medico, nombre FROM medicos WHERE id_medico = $1",
+      [id_medico]
+    );
+    
+    if (medicoResult.rows.length === 0) {
+      return res.json({
+        status: "error",
+        mensaje: "❌ Médico no encontrado."
+      });
+    }
+    
+    const medico = medicoResult.rows[0];
+    console.log("✅ Médico encontrado:", medico.nombre);
+    
+    // Si se proporciona fecha, calcular día de la semana
+    let diaSemana = null;
+    if (fecha) {
+      const fechaObj = new Date(fecha);
+      diaSemana = fechaObj.getDay();
+      diaSemana = diaSemana === 0 ? 6 : diaSemana - 1;
+      console.log("📆 Día de la semana:", diaSemana);
+    }
+    
+    // Obtener horarios del médico
+    let query = "SELECT DISTINCT hora, dia_semana FROM horarios_medicos WHERE id_medico = $1";
+    let params = [id_medico];
+    
+    if (diaSemana !== null) {
+      query += " AND dia_semana = $2";
+      params.push(diaSemana);
+    }
+    
+    query += " ORDER BY dia_semana, hora ASC";
+    
+    console.log("🔍 Consultando horarios...");
+    const horariosResult = await pool.query(query, params);
+    
+    if (horariosResult.rows.length === 0) {
+      return res.json({
+        status: "ok",
+        mensaje: `El Dr. ${medico.nombre} no tiene horarios configurados.`,
+        medico: medico.nombre,
+        horarios: []
+      });
+    }
+    
+    console.log(`✅ Horarios encontrados: ${horariosResult.rows.length}`);
+    
+    // Si hay fecha, filtrar por horarios ya ocupados
+    let horasOcupadas = [];
+    if (fecha) {
+      const citasResult = await pool.query(
+        "SELECT hora FROM citas WHERE id_medico = $1 AND fecha = $2 AND estado != 'Anulado'",
+        [id_medico, fecha]
+      );
+      horasOcupadas = citasResult.rows.map(row => row.hora);
+      console.log("🚫 Horas ocupadas:", horasOcupadas.length);
+    }
+    
+    // Formatear horarios
+    const formatearHora = (hora) => {
+      const [hh, mm] = hora.split(':');
+      const horaNum = parseInt(hh);
+      const periodo = horaNum >= 12 ? 'pm' : 'am';
+      const hora12 = horaNum > 12 ? horaNum - 12 : (horaNum === 0 ? 12 : horaNum);
+      return `${String(hora12).padStart(2, '0')}:${mm} ${periodo}`;
+    };
+    
+    const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+    
+    const horariosDisponibles = horariosResult.rows
+      .filter(row => !horasOcupadas.some(ocupada => ocupada === row.hora))
+      .map((row, index) => ({
+        numero: index + 1,
+        hora: row.hora,
+        hora_formateada: formatearHora(row.hora),
+        dia_semana: diasSemana[row.dia_semana],
+        disponible: !horasOcupadas.some(ocupada => ocupada === row.hora)
+      }));
+    
+    // Crear mensaje de texto
+    const listaHorarios = horariosDisponibles
+      .map(h => `${h.numero}. ${h.hora_formateada}${fecha ? '' : ` - ${h.dia_semana}`}`)
+      .join('\n');
+    
+    const mensaje = `⏰ Horarios disponibles de ${medico.nombre}:\n\n${listaHorarios}\n\nResponde con el número del horario que prefieres.`;
+    
+    const response = {
+      status: "ok",
+      mensaje: mensaje,
+      medico: medico.nombre,
+      horarios: horariosDisponibles
+    };
+    
+    console.log("📤 Enviando respuesta:");
+    console.log(JSON.stringify(response, null, 2));
+    console.log("====== FIN PETICIÓN EXITOSA ======\n");
+    
+    res.json(response);
+    
+  } catch (error) {
+    console.error("❌❌❌ ERROR CAPTURADO ❌❌❌");
+    console.error("Tipo de error:", error.name);
+    console.error("Mensaje:", error.message);
+    console.error("Stack:", error.stack);
+    console.error("====== FIN PETICIÓN CON ERROR ======\n");
+    
+    res.status(500).json({ 
+      status: "error",
+      mensaje: "❌ Ocurrió un error al consultar los horarios."
+    });
+  }
+});
+
+
 app.all("/citas", async (req, res) => {
   console.log("\n====== NUEVA PETICIÓN /citas ======");
   console.log("⏰ Hora:", new Date().toISOString());

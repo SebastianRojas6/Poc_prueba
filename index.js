@@ -303,7 +303,6 @@ app.all("/validar-dia", async (req, res) => {
   }
 });
 
-
 app.post("/crear-cita", async (req, res) => {
   console.log("\n====== PETICIÓN POST /crear-cita ======");
   console.log("📥 Body recibido:", JSON.stringify(req.body, null, 2));
@@ -311,17 +310,30 @@ app.post("/crear-cita", async (req, res) => {
   try {
     const body = Array.isArray(req.body) ? req.body[0] : req.body;
 
-    const Horarios_poc = body?.contact?.variables?.["Horarios-poc"] ?? body?.Horarios_poc ?? body?.horarios_poc;
-    const MEDICO_PRUEBA = body?.contact?.variables?.MEDICO_PRUEBA ?? body?.MEDICO_PRUEBA;
-    const HORARIO_CITA = body?.contact?.variables?.["HORARIO-CITA"] ?? body?.HORARIO_CITA;
-    let telefono = body?.contact?.phone ?? body?.telefono ?? body?.phone ?? body?.info?.message?.channel_data?.message?.from ?? body?.last_message_data?.message?.from;
+    const Horarios_poc =
+      body?.contact?.variables?.["Horarios-poc"] ??
+      body?.Horarios_poc ??
+      body?.horarios_poc;
+    const MEDICO_PRUEBA =
+      body?.contact?.variables?.MEDICO_PRUEBA ?? body?.MEDICO_PRUEBA;
+    const HORARIO_CITA =
+      body?.contact?.variables?.["HORARIO-CITA"] ?? body?.HORARIO_CITA;
+    let telefono =
+      body?.contact?.phone ??
+      body?.telefono ??
+      body?.phone ??
+      body?.info?.message?.channel_data?.message?.from ??
+      body?.last_message_data?.message?.from;
 
     if (!Horarios_poc || !MEDICO_PRUEBA || !HORARIO_CITA || !telefono) {
       return res.status(400).json({
-        mensaje: "❌ Faltan datos requeridos: Horarios_poc, MEDICO_PRUEBA, HORARIO_CITA o teléfono."
+        mensaje:
+          "❌ Faltan datos requeridos: Horarios_poc, MEDICO_PRUEBA, HORARIO_CITA o teléfono.",
       });
     }
 
+    const medicoId = parseInt(MEDICO_PRUEBA, 10);
+    const horarioIndex = parseInt(HORARIO_CITA, 10) - 1;
     const telefonoRawDigits = String(telefono).replace(/\D/g, "");
 
     const pacienteResult = await pool.query(
@@ -334,7 +346,7 @@ app.post("/crear-cita", async (req, res) => {
 
     if (pacienteResult.rows.length === 0) {
       return res.status(404).json({
-        mensaje: `❌ No se encontró un paciente con el número ${telefono}.`
+        mensaje: `❌ No se encontró un paciente con el número ${telefono}.`,
       });
     }
 
@@ -342,7 +354,7 @@ app.post("/crear-cita", async (req, res) => {
 
     const medicoResult = await pool.query(
       "SELECT id_medico, nombre FROM medicos WHERE id_medico = $1",
-      [MEDICO_PRUEBA]
+      [medicoId]
     );
 
     if (medicoResult.rows.length === 0) {
@@ -356,50 +368,66 @@ app.post("/crear-cita", async (req, res) => {
        FROM horarios_medicos
        WHERE id_medico = $1 AND dia_semana = $2
        ORDER BY hora ASC`,
-      [MEDICO_PRUEBA, Horarios_poc]
+      [medicoId, Horarios_poc]
     );
 
     if (horariosResult.rows.length === 0) {
       return res.status(404).json({
-        mensaje: `❌ El Dr. ${medico.nombre} no tiene horarios disponibles para ${Horarios_poc}.`
+        mensaje: `❌ El Dr. ${medico.nombre} no tiene horarios disponibles para ${Horarios_poc}.`,
       });
     }
 
-    const indice = parseInt(HORARIO_CITA, 10) - 1;
-    if (isNaN(indice) || indice < 0 || indice >= horariosResult.rows.length) {
+    if (
+      isNaN(horarioIndex) ||
+      horarioIndex < 0 ||
+      horarioIndex >= horariosResult.rows.length
+    ) {
       return res.status(400).json({
-        mensaje: `❌ El número de horario es inválido. Debe estar entre 1 y ${horariosResult.rows.length}.`
+        mensaje: `❌ El número de horario es inválido. Debe estar entre 1 y ${horariosResult.rows.length}.`,
       });
     }
 
-    const horaSeleccionada = horariosResult.rows[indice].hora;
-
+    const horaSeleccionada = horariosResult.rows[horarioIndex].hora;
     const fechaHoy = new Date().toISOString().slice(0, 10);
 
     const existeCita = await pool.query(
       `SELECT id_cita FROM citas
        WHERE id_medico = $1 AND fecha = $2 AND hora = $3 AND estado != 'Anulado'`,
-      [MEDICO_PRUEBA, fechaHoy, horaSeleccionada]
+      [medicoId, fechaHoy, horaSeleccionada]
     );
 
     if (existeCita.rows.length > 0) {
-      return res.status(409).json({ mensaje: "❌ Ese horario ya fue reservado. Elige otro." });
+      return res
+        .status(409)
+        .json({ mensaje: "❌ Ese horario ya fue reservado. Elige otro." });
     }
 
-    const consultaResult = await pool.query("SELECT id_consulta FROM consultas LIMIT 1");
+    const consultaResult = await pool.query(
+      "SELECT id_consulta FROM consultas LIMIT 1"
+    );
     if (consultaResult.rows.length === 0) {
-      return res.status(500).json({ mensaje: "❌ No hay consultas registradas en la base de datos." });
+      return res
+        .status(500)
+        .json({
+          mensaje: "❌ No hay consultas registradas en la base de datos.",
+        });
     }
 
     const id_consulta = consultaResult.rows[0].id_consulta;
-
-    const codigo = generarCodigoCita();
+    const codigo = "CITA-" + Date.now().toString(36).toUpperCase();
 
     const insert = await pool.query(
       `INSERT INTO citas (codigo, id_paciente, id_medico, id_consulta, fecha, hora, estado)
        VALUES ($1, $2, $3, $4, $5, $6, 'Pendiente')
        RETURNING *`,
-      [codigo, paciente.id_paciente, MEDICO_PRUEBA, id_consulta, fechaHoy, horaSeleccionada]
+      [
+        codigo,
+        paciente.id_paciente,
+        medicoId,
+        id_consulta,
+        fechaHoy,
+        horaSeleccionada,
+      ]
     );
 
     const cita = insert.rows[0];
@@ -412,8 +440,8 @@ app.post("/crear-cita", async (req, res) => {
         medico: medico.nombre,
         dia: Horarios_poc,
         hora: horaSeleccionada,
-        estado: cita.estado
-      }
+        estado: cita.estado,
+      },
     });
 
     console.log("✅ Cita registrada correctamente:", cita);

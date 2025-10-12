@@ -281,8 +281,10 @@ app.all("/validar-dia", async (req, res) => {
     console.log("✅ Día válido y médico atiende ese día");
 
     const response = {
-      mensaje: `✅ Perfecto, elegiste ${diaNormalizado}.\n\nAhora te mostraré los horarios disponibles.`,
-      dia_validado: diaNormalizado,
+      mensaje: `Ahora te mostraré los horarios disponibles.`,
+      set_variables: {
+        "Horarios-poc": diaNormalizado,
+      },
     };
 
     console.log("📤 Enviando respuesta:");
@@ -406,11 +408,9 @@ app.post("/crear-cita", async (req, res) => {
       "SELECT id_consulta FROM consultas LIMIT 1"
     );
     if (consultaResult.rows.length === 0) {
-      return res
-        .status(500)
-        .json({
-          mensaje: "❌ No hay consultas registradas en la base de datos.",
-        });
+      return res.status(500).json({
+        mensaje: "❌ No hay consultas registradas en la base de datos.",
+      });
     }
 
     const id_consulta = consultaResult.rows[0].id_consulta;

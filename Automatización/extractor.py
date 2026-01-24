@@ -8,11 +8,12 @@ class Extractor:
         tabla = self.driver.find_element(By.ID, "tbBuscador:idFormBuscarProceso:dtProcesos_data")
         filas = tabla.find_elements(By.TAG_NAME, "tr")
         datos = []
-        for fila in filas:
+        for i, fila in enumerate(filas):
             try:
                 celdas = fila.find_elements(By.TAG_NAME, "td")
                 if len(celdas) >= 13:
                     dato = {
+                        'Indice': i,
                         'N°': celdas[0].text.strip(),
                         'Nombre o Sigla de la Entidad': celdas[1].text.strip(),
                         'Fecha y Hora de Publicacion': celdas[2].text.strip(),

@@ -4,7 +4,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 import time
-from config import URL, TIMEOUT
+from config import URL, TIMEOUT, OBJETO_CONTRATACION
 
 class SEACEScraper:
     def __init__(self):
@@ -17,7 +17,6 @@ class SEACEScraper:
         self.driver = webdriver.Chrome(options=options)
         self.wait = WebDriverWait(self.driver, TIMEOUT)
         self.url = URL
-        self.datos_totales = []
         
     def abrir_pagina(self):
         print("Abriendo página de SEACE...")
@@ -32,6 +31,26 @@ class SEACEScraper:
         tab.click()
         time.sleep(3)
         print("✓ Pestaña activa")
+    
+    def seleccionar_objeto_contratacion(self):
+        print(f"Seleccionando Objeto de Contratación: {OBJETO_CONTRATACION}")
+        try:
+            time.sleep(2)
+            select_element = self.wait.until(EC.presence_of_element_located(
+                (By.ID, "tbBuscador:idFormBuscarProceso:j_idt188_input")
+            ))
+            Select(select_element).select_by_visible_text(OBJETO_CONTRATACION)
+            time.sleep(1)
+            print(f"✓ {OBJETO_CONTRATACION} seleccionado")
+        except:
+            script = f"""
+            var select = document.getElementById('tbBuscador:idFormBuscarProceso:j_idt188_input');
+            select.value = '65';
+            select.dispatchEvent(new Event('change'));
+            """
+            self.driver.execute_script(script)
+            time.sleep(1)
+            print(f"✓ {OBJETO_CONTRATACION} seleccionado (método alternativo)")
     
     def seleccionar_anio(self, anio):
         print(f"Seleccionando año {anio}...")

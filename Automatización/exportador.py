@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 from datetime import datetime
+from openpyxl.styles import Font, Alignment, PatternFill
 
 class Exportador:
     def exportar_excel(self, datos, nombre_archivo=None):
@@ -9,8 +10,8 @@ class Exportador:
             return
         
         if nombre_archivo is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            nombre_archivo = f"SEACE_2026_{timestamp}.xlsx"
+            now = datetime.now()
+            nombre_archivo = now.strftime("%m.%d.%Y") + "-T2MDC.xlsx"
         
         df_raw = pd.DataFrame(datos)
         
@@ -47,6 +48,7 @@ class Exportador:
                         df_procesado.at[i, 'Presentacion de Propuesta'] = etapa.get('Fecha Fin', '')
         
         df_procesado['Descripción del RQ'] = df_raw.get('Descripción de Objeto', '')
+        df_procesado['PDF'] = df_raw.get('PDF_Path', '')
         
         def convertir_fecha(fecha_str):
             try:
@@ -83,13 +85,12 @@ class Exportador:
                 'J': 25,  # Fecha Integracion
                 'K': 25,  # Presentacion Propuesta
                 'L': 15,  # Hora Envío
-                'M': 60   # Descripción
+                'M': 60,  # Descripción
+                'N': 20   # PDF
             }
             
             for col, ancho in columnas_anchos.items():
                 worksheet.column_dimensions[col].width = ancho
-            
-            from openpyxl.styles import Font, Alignment, PatternFill
             
             header_fill = PatternFill(start_color="90EE90", end_color="90EE90", fill_type="solid")
             header_font = Font(bold=True)
@@ -99,6 +100,15 @@ class Exportador:
                 cell.fill = header_fill
                 cell.font = header_font
                 cell.alignment = center_alignment
+            
+            for row in range(2, len(df_procesado) + 2):
+                cell = worksheet[f'N{row}']
+                pdf_path = cell.value
+                if pdf_path and os.path.exists(pdf_path):
+                    cell.hyperlink = pdf_path
+                    cell.value = "Ver PDF"
+                    cell.font = Font(color="0563C1", underline="single")
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
         
         print(f"\n{'='*60}")
         print(f"✓ EXPORTADO EXITOSAMENTE")

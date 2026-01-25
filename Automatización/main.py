@@ -5,11 +5,11 @@ from navegador_ficha import NavegadorFicha
 from extractor_ficha import ExtractorFicha
 from exportador import Exportador
 from filtros import Filtros
-from config import ANIOS
+from config import ANIOS, LIMITE_PAGINAS
 
 def main():
     scraper = SEACEScraper()
-    3
+    
     try:
         scraper.abrir_pagina()
         scraper.click_tab_procedimientos()
@@ -34,8 +34,9 @@ def main():
             
             pagina_actual, total_paginas = extractor.obtener_info_paginacion()
             print(f"Total páginas: {total_paginas}")
+            print(f"Procesando solo {LIMITE_PAGINAS} página(s) para prueba")
             
-            for num_pagina in range(1, total_paginas + 1):
+            for num_pagina in range(1, min(LIMITE_PAGINAS + 1, total_paginas + 1)):
                 print(f"\n{'─'*60}")
                 print(f"Página {num_pagina}/{total_paginas}")
                 print(f"{'─'*60}")
@@ -49,7 +50,7 @@ def main():
                     print(f"  [{idx+1}/{len(datos_filtrados)}] {dato['Nomenclatura']}")
                     
                     if nav_ficha.click_ficha_seleccion(dato['Indice']):
-                        info_ficha = ext_ficha.extraer_todo()
+                        info_ficha = ext_ficha.extraer_todo(dato['Nomenclatura'])
                         dato.update(info_ficha)
                         nav_ficha.click_regresar()
                     
@@ -57,16 +58,6 @@ def main():
                     datos_totales.append(dato)
                 
                 print(f"✓ Página {num_pagina} completada ({len(datos_totales)} registros acumulados)")
-                
-                if num_pagina < total_paginas:
-                    print(f"→ Navegando a página {num_pagina + 1}...")
-                    if not navegador.click_numero_pagina(num_pagina + 1):
-                        print("  Intento 1 falló, probando botón siguiente...")
-                        if not navegador.ir_siguiente_pagina():
-                            print("  ⚠ No se pudo navegar, deteniendo...")
-                            break
-                    else:
-                        print(f"  ✓ En página {num_pagina + 1}")
         
         print(f"\n{'='*60}")
         print(f"RESUMEN FINAL")

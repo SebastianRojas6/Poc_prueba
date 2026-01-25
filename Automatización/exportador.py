@@ -14,30 +14,51 @@ class Exportador:
         
         df_raw = pd.DataFrame(datos)
         
+        fecha_extraccion = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        
         df_procesado = pd.DataFrame()
         
         df_procesado['Item'] = range(1, len(df_raw) + 1)
+        df_procesado['Fecha de Extracción'] = fecha_extraccion
+        df_procesado['Fecha y Hora de Publicacion'] = df_raw.get('Fecha y Hora de Publicacion', '')
         df_procesado['Nro de Proceso'] = df_raw.get('Nomenclatura', '')
         df_procesado['Entidad (Empresa)'] = df_raw.get('Nombre o Sigla de la Entidad', '')
         df_procesado['Tipo Servicio'] = df_raw.get('Objeto de Contratación', '')
         
-        cronogramas = df_raw.get('Cronograma', [])
+        df_procesado['Registro de Participantes (Fecha fin)'] = ''
+        df_procesado['Hora de Envío'] = ''
+        df_procesado['Fecha de Formulacion de consultas'] = ''
+        df_procesado['Fecha de integracion de bases'] = ''
+        df_procesado['Presentacion de Propuesta'] = ''
+        df_procesado['Hora de Envío.1'] = ''
+        
         for i, dato in df_raw.iterrows():
             cronograma = dato.get('Cronograma', [])
             if isinstance(cronograma, list):
                 for etapa in cronograma:
-                    if 'Registro de participantes' in etapa.get('Etapa', ''):
+                    etapa_nombre = etapa.get('Etapa', '')
+                    if 'Registro de participantes' in etapa_nombre:
                         df_procesado.at[i, 'Registro de Participantes (Fecha fin)'] = etapa.get('Fecha Fin', '')
-                        df_procesado.at[i, 'Hora de Envío'] = ''
-                    elif 'Formulación de consultas' in etapa.get('Etapa', ''):
+                    elif 'Formulación de consultas' in etapa_nombre:
                         df_procesado.at[i, 'Fecha de Formulacion de consultas'] = etapa.get('Fecha Fin', '')
-                    elif 'Integración de las Bases' in etapa.get('Etapa', ''):
+                    elif 'Integración de las Bases' in etapa_nombre:
                         df_procesado.at[i, 'Fecha de integracion de bases'] = etapa.get('Fecha Fin', '')
-                    elif 'Presentación de propuestas' in etapa.get('Etapa', ''):
+                    elif 'Presentación de propuestas' in etapa_nombre:
                         df_procesado.at[i, 'Presentacion de Propuesta'] = etapa.get('Fecha Fin', '')
-                        df_procesado.at[i, 'Hora de Envío'] = ''
         
         df_procesado['Descripción del RQ'] = df_raw.get('Descripción de Objeto', '')
+        
+        def convertir_fecha(fecha_str):
+            try:
+                return pd.to_datetime(fecha_str, format='%d/%m/%Y %H:%M')
+            except:
+                return pd.NaT
+        
+        df_procesado['_fecha_temp'] = df_procesado['Fecha y Hora de Publicacion'].apply(convertir_fecha)
+        df_procesado = df_procesado.sort_values('_fecha_temp', ascending=False, na_position='last')
+        df_procesado = df_procesado.drop('_fecha_temp', axis=1)
+        df_procesado = df_procesado.reset_index(drop=True)
+        df_procesado['Item'] = range(1, len(df_procesado) + 1)
         
         output_dir = "resultados_seace"
         if not os.path.exists(output_dir):
@@ -51,16 +72,18 @@ class Exportador:
             
             columnas_anchos = {
                 'A': 8,   # Item
-                'B': 35,  # Nro de Proceso
-                'C': 40,  # Entidad
-                'D': 18,  # Tipo Servicio
-                'E': 25,  # Registro Participantes
-                'F': 15,  # Hora Envío
-                'G': 25,  # Fecha Formulacion
-                'H': 25,  # Fecha Integracion
-                'I': 25,  # Presentacion Propuesta
-                'J': 15,  # Hora Envío
-                'K': 60   # Descripción
+                'B': 22,  # Fecha de Extracción
+                'C': 22,  # Fecha y Hora de Publicacion
+                'D': 35,  # Nro de Proceso
+                'E': 40,  # Entidad
+                'F': 18,  # Tipo Servicio
+                'G': 25,  # Registro Participantes
+                'H': 15,  # Hora Envío
+                'I': 25,  # Fecha Formulacion
+                'J': 25,  # Fecha Integracion
+                'K': 25,  # Presentacion Propuesta
+                'L': 15,  # Hora Envío
+                'M': 60   # Descripción
             }
             
             for col, ancho in columnas_anchos.items():
@@ -82,4 +105,5 @@ class Exportador:
         print(f"{'='*60}")
         print(f"Archivo: {ruta_completa}")
         print(f"Total registros: {len(datos)}")
+        print(f"Ordenado por fecha (más reciente primero)")
         print(f"{'='*60}\n")

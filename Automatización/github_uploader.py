@@ -17,8 +17,8 @@ class GitHubUploader:
             
             os.chdir(self.repo_path)
             
-            print("Agregando archivos...")
-            result = subprocess.run(['git', 'add', '.'], 
+            print("Agregando solo carpeta documentos_descargados...")
+            result = subprocess.run(['git', 'add', 'documentos_descargados/'], 
                                   capture_output=True, text=True)
             if result.returncode != 0:
                 print(f"Error en git add: {result.stderr}")

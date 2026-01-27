@@ -5,6 +5,7 @@ import time
 import re
 import os
 import glob
+import hashlib
 
 class ExtractorFicha:
     def __init__(self, driver):
@@ -75,15 +76,49 @@ class ExtractorFicha:
         except:
             return []
     
+    def calcular_hash_archivo(self, ruta):
+        """Calcula el hash MD5 de un archivo"""
+        hash_md5 = hashlib.md5()
+        with open(ruta, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
+    
+    def archivo_existe(self, download_dir, nuevo_archivo):
+        """Verifica si ya existe un archivo con el mismo contenido"""
+        if not os.path.exists(nuevo_archivo):
+            return False
+            
+        nuevo_hash = self.calcular_hash_archivo(nuevo_archivo)
+        
+        for archivo_existente in glob.glob(os.path.join(download_dir, "*")):
+            if archivo_existente == nuevo_archivo:
+                continue
+            
+            if os.path.isfile(archivo_existente):
+                hash_existente = self.calcular_hash_archivo(archivo_existente)
+                if hash_existente == nuevo_hash:
+                    print(f"      ⚠ Archivo duplicado detectado, eliminando descarga...")
+                    os.remove(nuevo_archivo)
+                    return True
+        
+        return False
+    
     def descargar_documento(self, nomenclatura):
         try:
             print("      Buscando documento...")
             time.sleep(2)
             
-            chrome_options = self.driver.capabilities
             download_dir = os.path.abspath("documentos_descargados")
             if not os.path.exists(download_dir):
                 os.makedirs(download_dir)
+            
+            nombre_limpio = nomenclatura.replace("/", "-").replace("\\", "-")
+            
+            archivos_existentes = glob.glob(os.path.join(download_dir, f"{nombre_limpio}.*"))
+            if archivos_existentes:
+                print(f"      ✓ Documento ya existe: {archivos_existentes[0]}")
+                return archivos_existentes[0]
             
             archivos_antes = set(glob.glob(os.path.join(download_dir, "*")))
             
@@ -123,8 +158,13 @@ class ExtractorFicha:
                                         
                                         if nuevos_archivos:
                                             archivo_descargado = list(nuevos_archivos)[0]
+                                            
+                                            if self.archivo_existe(download_dir, archivo_descargado):
+                                                archivos_existentes = glob.glob(os.path.join(download_dir, f"{nombre_limpio}.*"))
+                                                if archivos_existentes:
+                                                    return archivos_existentes[0]
+                                            
                                             extension = os.path.splitext(archivo_descargado)[1]
-                                            nombre_limpio = nomenclatura.replace("/", "-").replace("\\", "-")
                                             ruta_final = os.path.join(download_dir, f"{nombre_limpio}{extension}")
                                             
                                             if os.path.exists(archivo_descargado):

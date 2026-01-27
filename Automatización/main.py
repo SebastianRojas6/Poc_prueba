@@ -1,3 +1,4 @@
+import os
 from scraper import SEACEScraper
 from extractor import Extractor
 from navegador import Navegador
@@ -5,7 +6,8 @@ from navegador_ficha import NavegadorFicha
 from extractor_ficha import ExtractorFicha
 from exportador import Exportador
 from filtros import Filtros
-from config import ANIOS, LIMITE_PAGINAS
+from github_uploader import GitHubUploader
+from config import ANIOS, LIMITE_PAGINAS, GITHUB_USER, GITHUB_REPO, REPO_PATH
 
 def main():
     scraper = SEACEScraper()
@@ -64,8 +66,17 @@ def main():
         print(f"{'='*60}")
         print(f"Total registros filtrados: {len(datos_totales)}")
         
+        github = GitHubUploader(REPO_PATH, GITHUB_USER, GITHUB_REPO)
+        
+        for dato in datos_totales:
+            if dato.get('Documento_Path'):
+                nombre_archivo = os.path.basename(dato['Documento_Path'])
+                dato['Documento_URL'] = github.generar_url_github(nombre_archivo)
+        
         exportador = Exportador()
         exportador.exportar_excel(datos_totales)
+        
+        github.subir_documentos()
         
     except Exception as e:
         print(f"\n❌ ERROR: {e}")

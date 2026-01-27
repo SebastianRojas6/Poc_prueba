@@ -1,3 +1,4 @@
+# exportador.py
 import pandas as pd
 import os
 from datetime import datetime
@@ -48,7 +49,7 @@ class Exportador:
                         df_procesado.at[i, 'Presentacion de Propuesta'] = etapa.get('Fecha Fin', '')
         
         df_procesado['Descripción del RQ'] = df_raw.get('Descripción de Objeto', '')
-        df_procesado['Documento'] = df_raw.get('Documento_Path', '')
+        df_procesado['Documento'] = df_raw.get('Documento_URL', '')
         
         def convertir_fecha(fecha_str):
             try:
@@ -67,28 +68,14 @@ class Exportador:
             os.makedirs(output_dir)
         
         ruta_completa = os.path.join(output_dir, nombre_archivo)
-        ruta_absoluta_excel = os.path.abspath(ruta_completa)
-        dir_excel = os.path.dirname(ruta_absoluta_excel)
         
         with pd.ExcelWriter(ruta_completa, engine='openpyxl') as writer:
             df_procesado.to_excel(writer, sheet_name='Procedimientos 2026', index=False)
             worksheet = writer.sheets['Procedimientos 2026']
             
             columnas_anchos = {
-                'A': 8,   # Item
-                'B': 22,  # Fecha de Extracción
-                'C': 22,  # Fecha y Hora de Publicacion
-                'D': 35,  # Nro de Proceso
-                'E': 40,  # Entidad
-                'F': 18,  # Tipo Servicio
-                'G': 25,  # Registro Participantes
-                'H': 15,  # Hora Envío
-                'I': 25,  # Fecha Formulacion
-                'J': 25,  # Fecha Integracion
-                'K': 25,  # Presentacion Propuesta
-                'L': 15,  # Hora Envío
-                'M': 60,  # Descripción
-                'N': 20   # Documento
+                'A': 8,   'B': 22,  'C': 22,  'D': 35,  'E': 40,  'F': 18,  'G': 25,
+                'H': 15,  'I': 25,  'J': 25,  'K': 25,  'L': 15,  'M': 60,  'N': 20
             }
             
             for col, ancho in columnas_anchos.items():
@@ -105,12 +92,10 @@ class Exportador:
             
             for row in range(2, len(df_procesado) + 2):
                 cell = worksheet[f'N{row}']
-                doc_path = cell.value
-                if doc_path and os.path.exists(doc_path):
-                    ruta_absoluta_doc = os.path.abspath(doc_path)
-                    cell.hyperlink = ruta_absoluta_doc
-                    extension = os.path.splitext(doc_path)[1].upper()
-                    cell.value = f"Ver {extension}"
+                doc_url = cell.value
+                if doc_url:
+                    cell.hyperlink = doc_url
+                    cell.value = "Ver Documento"
                     cell.font = Font(color="0563C1", underline="single")
                     cell.alignment = Alignment(horizontal="center", vertical="center")
         

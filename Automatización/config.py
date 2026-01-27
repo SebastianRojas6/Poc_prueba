@@ -2,7 +2,11 @@ URL = "https://prod2.seace.gob.pe/seacebus-uiwd-pub/buscadorPublico/buscadorPubl
 ANIOS = [2026]
 TIMEOUT = 30
 OBJETO_CONTRATACION = "Servicio"
-LIMITE_PAGINAS = 50
+LIMITE_PAGINAS = 1
+
+GITHUB_USER = "SebastianRojas6"
+GITHUB_REPO = "Poc_prueba"
+REPO_PATH = "/home/sebastianrojas/Escritorio/Poc_prueba"
 
 PALABRAS_CLAVE = [
     "Desarrollo de aplicaciones",

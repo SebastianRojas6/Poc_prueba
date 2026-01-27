@@ -4,6 +4,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import time
 import re
 import os
+import glob
 
 class ExtractorFicha:
     def __init__(self, driver):
@@ -74,56 +75,75 @@ class ExtractorFicha:
         except:
             return []
     
-    def descargar_pdf(self, nomenclatura):
+    def descargar_documento(self, nomenclatura):
         try:
-            print("      Buscando PDF...")
+            print("      Buscando documento...")
             time.sleep(2)
+            
+            chrome_options = self.driver.capabilities
+            download_dir = os.path.abspath("documentos_descargados")
+            if not os.path.exists(download_dir):
+                os.makedirs(download_dir)
+            
+            archivos_antes = set(glob.glob(os.path.join(download_dir, "*")))
             
             tabla = self.driver.find_element(By.ID, "tbFicha:dtDocumentos_data")
             filas = tabla.find_elements(By.TAG_NAME, "tr")
             
             for fila in filas:
                 try:
-                    enlaces = fila.find_elements(By.TAG_NAME, "a")
-                    for enlace in enlaces:
-                        onclick = enlace.get_attribute("onclick")
-                        if onclick and "descargaDocGeneral" in onclick:
-                            match = re.search(r"descargaDocGeneral\('([^']+)','([^']+)','([^']+)'\)", onclick)
-                            if match:
-                                doc_id = match.group(1)
-                                sistema = match.group(2)
-                                nombre_archivo = match.group(3)
-                                
-                                print(f"      Descargando: {nombre_archivo}")
-                                
-                                url_descarga = f"https://prod2.seace.gob.pe/seacebus-uiwd-pub/downloadCustom/obtenerDocumento.xhtml?id={doc_id}&nombreArchivo={nombre_archivo}"
-                                
-                                self.driver.execute_script(f"window.open('{url_descarga}', '_blank');")
-                                time.sleep(3)
-                                
-                                ventanas = self.driver.window_handles
-                                if len(ventanas) > 1:
-                                    self.driver.switch_to.window(ventanas[-1])
-                                    time.sleep(2)
-                                    self.driver.close()
-                                    self.driver.switch_to.window(ventanas[0])
-                                
-                                pdf_dir = "pdfs_descargados"
-                                if not os.path.exists(pdf_dir):
-                                    os.makedirs(pdf_dir)
-                                
-                                ruta_local = os.path.join(pdf_dir, f"{nomenclatura}.pdf")
-                                
-                                print(f"      ✓ PDF descargado")
-                                return ruta_local
+                    celdas = fila.find_elements(By.TAG_NAME, "td")
+                    if len(celdas) >= 4:
+                        tipo_doc = celdas[2].text.strip()
+                        
+                        if "Bases" in tipo_doc:
+                            enlaces = celdas[3].find_elements(By.TAG_NAME, "a")
+                            
+                            for enlace in enlaces:
+                                onclick = enlace.get_attribute("onclick")
+                                if onclick and "descargaDocGeneral" in onclick:
+                                    match = re.search(r"descargaDocGeneral\('([^']+)','([^']+)','([^']+)'\)", onclick)
+                                    if match:
+                                        nombre_archivo = match.group(3)
+                                        print(f"      Encontrado: {nombre_archivo}")
+                                        
+                                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", enlace)
+                                        time.sleep(1)
+                                        
+                                        try:
+                                            self.driver.execute_script("arguments[0].click();", enlace)
+                                        except:
+                                            enlace.click()
+                                        
+                                        print(f"      Esperando descarga...")
+                                        time.sleep(5)
+                                        
+                                        archivos_despues = set(glob.glob(os.path.join(download_dir, "*")))
+                                        nuevos_archivos = archivos_despues - archivos_antes
+                                        
+                                        if nuevos_archivos:
+                                            archivo_descargado = list(nuevos_archivos)[0]
+                                            extension = os.path.splitext(archivo_descargado)[1]
+                                            nombre_limpio = nomenclatura.replace("/", "-").replace("\\", "-")
+                                            ruta_final = os.path.join(download_dir, f"{nombre_limpio}{extension}")
+                                            
+                                            if os.path.exists(archivo_descargado):
+                                                if os.path.exists(ruta_final):
+                                                    os.remove(ruta_final)
+                                                os.rename(archivo_descargado, ruta_final)
+                                                print(f"      ✓ Documento descargado: {ruta_final}")
+                                                return ruta_final
+                                        else:
+                                            print(f"      ⚠ No se detectó descarga")
+                                            return ""
                 except Exception as e:
-                    print(f"      Error en fila PDF: {e}")
+                    print(f"      Error en fila: {e}")
                     continue
             
-            print("      ⚠ No se encontró PDF")
+            print("      ⚠ No se encontró documento de Bases")
             return ""
         except Exception as e:
-            print(f"      Error al descargar PDF: {e}")
+            print(f"      Error al descargar documento: {e}")
             return ""
     
     def extraer_todo(self, nomenclatura):
@@ -131,12 +151,12 @@ class ExtractorFicha:
         info_ent = self.extraer_info_entidad()
         info_proc = self.extraer_info_procedimiento()
         cronograma = self.extraer_cronograma()
-        pdf_path = self.descargar_pdf(nomenclatura)
+        doc_path = self.descargar_documento(nomenclatura)
         
         return {
             **info_conv,
             **info_ent,
             **info_proc,
             'Cronograma': cronograma,
-            'PDF_Path': pdf_path
+            'Documento_Path': doc_path
         }

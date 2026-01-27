@@ -38,7 +38,7 @@ class Exportador:
             if isinstance(cronograma, list):
                 for etapa in cronograma:
                     etapa_nombre = etapa.get('Etapa', '')
-                    if 'Registro de participantes' in etapa_nombre:
+                    if 'Registro de participantes' in etapa_nombre or 'Invitación' in etapa_nombre:
                         df_procesado.at[i, 'Registro de Participantes (Fecha fin)'] = etapa.get('Fecha Fin', '')
                     elif 'Formulación de consultas' in etapa_nombre:
                         df_procesado.at[i, 'Fecha de Formulacion de consultas'] = etapa.get('Fecha Fin', '')
@@ -48,7 +48,7 @@ class Exportador:
                         df_procesado.at[i, 'Presentacion de Propuesta'] = etapa.get('Fecha Fin', '')
         
         df_procesado['Descripción del RQ'] = df_raw.get('Descripción de Objeto', '')
-        df_procesado['PDF'] = df_raw.get('PDF_Path', '')
+        df_procesado['Documento'] = df_raw.get('Documento_Path', '')
         
         def convertir_fecha(fecha_str):
             try:
@@ -67,6 +67,8 @@ class Exportador:
             os.makedirs(output_dir)
         
         ruta_completa = os.path.join(output_dir, nombre_archivo)
+        ruta_absoluta_excel = os.path.abspath(ruta_completa)
+        dir_excel = os.path.dirname(ruta_absoluta_excel)
         
         with pd.ExcelWriter(ruta_completa, engine='openpyxl') as writer:
             df_procesado.to_excel(writer, sheet_name='Procedimientos 2026', index=False)
@@ -86,7 +88,7 @@ class Exportador:
                 'K': 25,  # Presentacion Propuesta
                 'L': 15,  # Hora Envío
                 'M': 60,  # Descripción
-                'N': 20   # PDF
+                'N': 20   # Documento
             }
             
             for col, ancho in columnas_anchos.items():
@@ -103,10 +105,12 @@ class Exportador:
             
             for row in range(2, len(df_procesado) + 2):
                 cell = worksheet[f'N{row}']
-                pdf_path = cell.value
-                if pdf_path and os.path.exists(pdf_path):
-                    cell.hyperlink = pdf_path
-                    cell.value = "Ver PDF"
+                doc_path = cell.value
+                if doc_path and os.path.exists(doc_path):
+                    ruta_absoluta_doc = os.path.abspath(doc_path)
+                    cell.hyperlink = ruta_absoluta_doc
+                    extension = os.path.splitext(doc_path)[1].upper()
+                    cell.value = f"Ver {extension}"
                     cell.font = Font(color="0563C1", underline="single")
                     cell.alignment = Alignment(horizontal="center", vertical="center")
         

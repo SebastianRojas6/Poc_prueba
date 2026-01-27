@@ -4,15 +4,28 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 import time
+import os
 from config import URL, TIMEOUT, OBJETO_CONTRATACION
 
 class SEACEScraper:
     def __init__(self):
+        download_dir = os.path.abspath("documentos_descargados")
+        if not os.path.exists(download_dir):
+            os.makedirs(download_dir)
+        
         options = webdriver.ChromeOptions()
         options.add_argument('--start-maximized')
         options.add_argument('--disable-blink-features=AutomationControlled')
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option('useAutomationExtension', False)
+        
+        prefs = {
+            "download.default_directory": download_dir,
+            "download.prompt_for_download": False,
+            "download.directory_upgrade": True,
+            "safebrowsing.enabled": True
+        }
+        options.add_experimental_option("prefs", prefs)
         
         self.driver = webdriver.Chrome(options=options)
         self.wait = WebDriverWait(self.driver, TIMEOUT)
